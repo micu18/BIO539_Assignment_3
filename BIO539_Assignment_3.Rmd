@@ -1,0 +1,390 @@
+---
+title: "BIO539_Assignment_3"
+output: pdf_document
+author: "Petru Dorin Micu"
+date: "April 4th 2019"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+
+library(tidyverse)
+
+
+setwd ("C:\\Users\\Dorin\\Desktop\\URI\\Sem. 4 (Spring 2019)\\BIO539\\Assignments\\Assignment 3")
+
+fed_r_d <- read_csv ('fed_r_d_spending.csv')
+#visualize the file
+#view(fed_r_d)
+
+
+clim_ch_sp <- read_csv ('climate_spending.csv')
+#visualize the file
+#view(clim_ch_sp)
+
+energy_sp <- read_csv ('energy_spending.csv')
+#visualize the file
+#view(energy_sp)
+
+#make new file from fed_r_d keeping only total and discretionary expenses, and gdp for each year 
+#remove duplicate rows using "distinct" function
+exp_gdp <- select(fed_r_d, -department, -rd_budget) %>% distinct
+#view(exp_gdp)
+
+#join expenses and gdp to climate spending
+clim_ch_sp_new <- inner_join(clim_ch_sp,
+                             exp_gdp,
+                                   by = "year")
+#view(clim_ch_sp_new)
+
+
+#join expenses and gdp to energy spending
+energy_sp_new <- inner_join(energy_sp,
+                             exp_gdp,
+                             by = "year")
+#view(energy_sp_new)
+
+#associate 0 with missing data for fed_r_d dataset
+fed_r_d$rd_budget[fed_r_d$rd_budget == 0] <- NA
+#!is.na = keeps the data that is not "NA"
+fed_r_d_new <- filter(fed_r_d, !is.na(rd_budget))  
+#view(fed_r_d_new)
+
+
+
+#function to reduce the size of the $amount (divide by 1,000,000)
+mil <- function(mil_vector){
+  as.numeric(mil_vector)/1000000
+}
+
+#function to reduce the size of the $amount (divide by 1,000,000,000)
+bil <- function(bil_vector){
+  as.numeric(bil_vector)/1000000000
+}
+
+#apply the "mil" function to the "federal R&D" data set
+fed_r_d_new0 <- select(fed_r_d_new, -department, -year)
+fed_r_d_new2 <- lapply(fed_r_d_new0, mil)
+fed_r_d_new2 <- as.tibble(fed_r_d_new2)
+fed_r_d_new2 <- cbind(select(fed_r_d_new, department, year), fed_r_d_new2)
+#head(fed_r_d_new2)[1,]
+
+#apply the "mil" function to the "energy spending" data set
+energy_sp_new0 <- select(energy_sp_new, -department, -year)
+energy_sp_new2 <- lapply(energy_sp_new0, mil)
+energy_sp_new2 <- as.tibble(energy_sp_new2)
+energy_sp_new2 <- cbind(select(energy_sp_new, department, year), energy_sp_new2)
+#head(energy_sp_new2)[1,]
+
+#apply the "mil" function to the "global climate change spending" data set
+clim_ch_sp_new0 <- select(clim_ch_sp_new, -department, -year)
+clim_ch_sp_new2 <- lapply(clim_ch_sp_new0, mil)
+clim_ch_sp_new2 <- as.tibble(clim_ch_sp_new2)
+clim_ch_sp_new2 <- cbind(select(clim_ch_sp_new, department, year), clim_ch_sp_new2)
+#head(clim_ch_sp_new2)[1,]
+
+#apply the "bil" function to the "Expenses and GDP" data set
+exp_gdp0 <- select(exp_gdp, -year)
+exp_gdp2 <- lapply(exp_gdp0, bil)
+exp_gdp2 <- as.tibble(exp_gdp2)
+exp_gdp2 <- cbind(select(exp_gdp, year), exp_gdp2)
+#head(exp_gdp2)[1,]
+
+
+modela <- lm(year ~ rd_budget, data = fed_r_d_new2)
+r2_a <- format(summary(modela)$r.squared, digits = 4)
+p_a <- format(summary(modela)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+```
+
+###Federal Departments' Research and Development Spending
+
+####Just a few of the state agencies enjoyed an increased Research and Development budget over time, while the majority of the agencies didn't see a significant change in their budget since `r min(fed_r_d$year)`. However, when taken together, the Federal R&D budget significantly increases over time (R square = `r r2_a`, p = `r p_a`).
+####Below we can see the R&D budget trends for the state agencies from `r min(fed_r_d$year)` until `r max(fed_r_d$year)`:
+
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+
+#update the ggplot theme to align the chart title in the middle
+theme_update(plot.title = element_text(hjust = 0.5))
+
+#plotting the federal R&D budget by year and department
+
+#matching the order of the legend with the order of the plot lines in the last year
+#get just the data from recent year
+ordered_legend <- filter(fed_r_d_new2, year == max(year)) %>% 
+#sort the data by last year's R&D Budget (use arrange function)
+arrange(desc(rd_budget))%>%
+pull(department)
+
+
+ggplot(fed_r_d_new2, aes(year, rd_budget, 
+                         color=department))+
+  geom_line()+
+  xlab("Year") + ylab("R&D Budget ($mil)")+
+  scale_color_discrete(breaks = ordered_legend,
+                       name = "State Department")+
+  geom_smooth(method=lm, formula=y~x)+
+  ggtitle("Evolution of Research and Development Budget\n for Federal Departments")
+
+#running regressions for R&D Budget and tot. & discr. spending, and gdp
+model1 <- lm(total_outlays ~ rd_budget, data = fed_r_d_new2)
+model2 <- lm(discretionary_outlays ~ rd_budget, data = fed_r_d_new2)
+model3 <- lm(gdp ~ rd_budget, data = fed_r_d_new2)
+
+#getting R square and p values for the models
+r2_1 <- format(summary(model1)$r.squared, digits = 4)
+p_1 <- format(summary(model1)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+r2_2 <- format(summary(model2)$r.squared, digits = 4)
+p_2 <- format(summary(model2)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+r2_3 <- format(summary(model3)$r.squared, digits = 4)
+p_3 <- format(summary(model3)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+```
+
+###R&D Spending versus GDP
+
+####In the chart below we can observe a significant positive correlation between R&D budget and GPD, with an $$R^2= `r r2_3`  ~and~  p=`r p_3`$$
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+
+
+ggplot(fed_r_d_new2, aes(gdp, rd_budget))+
+  xlab("GDP") + ylab("R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="blue")+
+  ggtitle("R&D Budget versus GDP ($mil)")
+
+```
+
+###R&D Spending versus Total and Discretionary Spending
+
+####Similarly, the R&D budget is highly correlated with Total Spending $$(R^2= `r r2_1`  ~, ~  p=`r p_1`),$$ and with Discretionary Spending $$(R^2= `r r2_2`  ~, ~  p=`r p_2`).$$
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+
+#R&D Spending vs. Total Spending
+
+ggplot(fed_r_d_new2, aes(total_outlays, rd_budget))+
+  xlab("Total Spending") + ylab("R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="red")+
+  ggtitle("R&D Budget versus Total Spending ($mil)")
+
+#R&D Spending vs. Discretionary Spending
+
+ggplot(fed_r_d_new2, aes(discretionary_outlays, rd_budget))+
+  xlab("Discretionary Spending") + ylab("R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="green")+
+  ggtitle("R&D Budget versus Discretionary Spending ($mil)")
+
+#running the linear model for Energy Spending and year
+modelb <- lm(year ~ energy_spending, data = energy_sp_new2)
+r2_b <- format(summary(modelb)$r.squared, digits = 4)
+p_b <- format(summary(modelb)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+```
+
+###Energy Agencies' Research and Development Spending
+####A second database offers insights about the R&D budget of the US Energy agencies from `r min(energy_sp_new$year)` until `r max(energy_sp_new$year)`.
+####Although some agencies saw an increase in their budget over the years, several saw a reduction, and overall there is no significant correlation between the agencies' R&D budget and the year (R square = `r r2_b`, p = `r p_b`).
+
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+
+#matching the order of the legend with the order of the plot lines in the last year
+ordered_legend_e <- filter(energy_sp_new2, year == max(year)) %>% 
+arrange(desc(energy_spending))%>% pull(department)
+
+
+ggplot(energy_sp_new2, aes(year, energy_spending, 
+                         color=department))+
+  geom_line()+
+  xlab("Year") + ylab("Energy Spending ($mil)")+
+  scale_color_brewer(palette="Paired", breaks = ordered_legend_e,
+                       name = "Energy Agency")+
+  geom_smooth(method=lm, formula=y~x)+
+  ggtitle("Evolution of R&D budget\n for Federal Energy Departments")
+
+#running regressions for Energy spending and tot. & discr. spending, and gdp
+model4 <- lm(total_outlays ~ energy_spending, data = energy_sp_new2)
+model5 <- lm(discretionary_outlays ~ energy_spending, data = energy_sp_new2)
+model6 <- lm(gdp ~ energy_spending, data = energy_sp_new2)
+
+#getting R square and p values for the models
+r2_4 <- format(summary(model4)$r.squared, digits = 4)
+p_4 <- format(summary(model4)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+r2_5 <- format(summary(model5)$r.squared, digits = 4)
+p_5 <- format(summary(model5)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+r2_6 <- format(summary(model6)$r.squared, digits = 4)
+p_6 <- format(summary(model6)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+```
+
+###Energy R&D Spending compared with GDP
+
+####In the chart below we see that there is no significant  correlation between R&D budget and GPD: $$R^2= `r r2_6`  ~and~  p=`r p_6`$$
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+ggplot(energy_sp_new2, aes(gdp, energy_spending))+
+  xlab("GDP") + ylab("Energy Agencies R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="blue")+
+  ggtitle("Energy Agencies R&D Budget versus GDP ($mil)")
+
+```
+
+###Energy R&D Spending compared with Total and Discretionary Spending
+
+####The R&D budget shows no significant correlation with Total Spending $$(R^2= `r r2_4`  ~, ~  p=`r p_4`),$$ or with Discretionary Spending $$(R^2= `r r2_5`  ~, ~  p=`r p_5`).$$
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE}
+#Energy R&D Spending vs. Total Spending
+
+ggplot(energy_sp_new2, aes(total_outlays, energy_spending))+
+  xlab("Total Spending") + ylab("Energy Agencies R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="red")+
+  ggtitle("Energy Agencies R&D Budget versus Total Spending ($mil)")
+
+#Energy R&D Spending vs. Discretionary Spending
+
+ggplot(energy_sp_new2, aes(discretionary_outlays, energy_spending))+
+  xlab("Discretionary Spending") + ylab("Energy Agencies R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="green")+
+  ggtitle("Energy Agencies R&D Budget versus Discretionary Spending ($mil)")
+
+#running the linear model for Climate Spending and year
+modelc <- lm(year ~ gcc_spending, data = clim_ch_sp_new2)
+r2_c <- format(summary(modelc)$r.squared, digits = 4)
+p_c <- format(summary(modelc)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+```
+
+###US Agencies' Global Climate Change Research and Development Budget
+####The last database shines a light on the R&D budget for global climate changes of several US Agencies from `r min(clim_ch_sp_new$year)` until `r max(clim_ch_sp_new$year)`.
+####Looking at the data it is safe to state that the budget for Global Climate Change R&D remained fixed over time, and that there is no significant correlation between the Federal agencies' R&D budget and the year (R square = `r r2_c`, p = `r p_c`).
+
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE}
+#matching the order of the legend with the order of the plot lines in the last year
+ordered_legend_e <- filter(clim_ch_sp_new, year == max(year)) %>% 
+arrange(desc(gcc_spending))%>% pull(department)
+
+
+ggplot(clim_ch_sp_new2, aes(year, gcc_spending, 
+                         color=department))+
+  geom_line()+
+  xlab("Year") + ylab("GCC Spending ($mil)")+
+  scale_color_brewer(palette="Paired", breaks = ordered_legend_e,
+                       name = "Federal Agency")+
+  geom_smooth(method=lm, formula=y~x)+
+  ggtitle("Evolution of GCC R&D budget\n for Federal Agencies")
+
+#running regressions for Energy spending and tot. & discr. spending, and gdp
+model7 <- lm(total_outlays ~ gcc_spending, data = clim_ch_sp_new2)
+model8 <- lm(discretionary_outlays ~ gcc_spending, data = clim_ch_sp_new2)
+model9 <- lm(gdp ~ gcc_spending, data = clim_ch_sp_new2)
+
+#getting R square and p values for the models
+r2_7 <- format(summary(model7)$r.squared, digits = 4)
+p_7 <- format(summary(model7)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+r2_8 <- format(summary(model8)$r.squared, digits = 4)
+p_8 <- format(summary(model8)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+r2_9 <- format(summary(model9)$r.squared, digits = 4)
+p_9 <- format(summary(model9)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+```
+
+###US Agencies' GCC Research budget compared with GDP
+
+####In the chart below we see that there is no significant  correlation between GCC R&D budget and GPD: $$R^2= `r r2_9`  ~and~  p=`r p_9`$$
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE} 
+ggplot(clim_ch_sp_new2, aes(gdp, gcc_spending))+
+  xlab("GDP") + ylab("GCC R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="blue")+
+  ggtitle("GCC R&D Budget versus GDP ($mil)")
+
+```
+
+###GCC R&D Spending compared with Total and Discretionary Spending
+
+####The GCC R&D budget shows no significant correlation with Total Spending $$(R^2= `r r2_7`  ~, ~  p=`r p_7`),$$ or with Discretionary Spending $$(R^2= `r r2_8`  ~, ~  p=`r p_8`).$$
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE}
+#GCC R&D Spending vs. Total Spending
+
+ggplot(clim_ch_sp_new2, aes(total_outlays, gcc_spending))+
+  xlab("Total Spending") + ylab("GCC R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="red")+
+  ggtitle("GCC R&D Budget versus Total Spending ($mil)")
+
+#GCC R&D Spending vs. Discretionary Spending
+
+ggplot(clim_ch_sp_new2, aes(discretionary_outlays, gcc_spending))+
+  xlab("Discretionary Spending") + ylab("GCC R&D Budget")+
+  geom_smooth(method=lm, show.legend = FALSE, color="green")+
+  ggtitle("GCC R&D Budget versus Discretionary Spending ($mil)")
+
+
+```
+
+###Federal Spending compared with GDP
+####It is interesting to note that the US Federal spending did not grow at the same rate as the Gross Domestic Product, as we can observe in the chart below
+
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE}
+
+#converting the data from wide to long
+exp_gdp_long <- gather(exp_gdp2, 
+                             key = "Legend",
+                             value = "Billion_Dollars",
+                             total_outlays:gdp) 
+#matching the order of the legend with the order of the plot lines in the last year
+ordered_legend_g <- filter(exp_gdp_long, year == max(year)) %>% 
+arrange(desc(Legend)) %>% pull(Legend)
+
+ 
+ggplot(exp_gdp_long, aes(year, Billion_Dollars, 
+                               color=Legend))+
+  geom_line()+
+  xlab("Year") + ylab("Billion Dollars")+
+  scale_color_brewer(palette="Dark2", breaks = ordered_legend_g,
+                     name = "Legend")+
+  ggtitle("US Federal spending compared with GDP")
+
+
+#running regressions for gdp and tot. & discr. spending
+model10 <- lm(total_outlays ~ gdp, data = exp_gdp2)
+model11 <- lm(discretionary_outlays ~ gdp, data = exp_gdp2)
+
+#getting R square and p values for the models
+r2_10 <- format(summary(model10)$r.squared, digits = 4)
+p_10 <- format(summary(model10)$coefficients[,"Pr(>|t|)"][[2]], digits = 4) 
+
+r2_11 <- format(summary(model11)$r.squared, digits = 4)
+p_11 <- format(summary(model11)$coefficients[,"Pr(>|t|)"][[2]], digits = 4)
+
+```
+
+###GDP compared with Total and Discretionary Spending
+
+####Even if the growth rate is not the same, the GDP shows a very strong and positive correlation with Total Spending $$(R^2= `r r2_10`  ~, ~  p=`r p_10`),$$ and with Discretionary Spending $$(R^2= `r r2_11`  ~, ~  p=`r p_11`).$$
+```{r warning = FALSE, message=FALSE, error=FALSE, echo=FALSE}
+#GCC R&D Spending vs. Total Spending
+
+ggplot(exp_gdp2, aes(total_outlays, gdp))+
+  xlab("Total Spending") + ylab("GDP")+
+  geom_smooth(method=lm, show.legend = FALSE, color="red")+
+  ggtitle("GDP versus Total Spending ($mil)")
+
+#GCC R&D Spending vs. Discretionary Spending
+
+ggplot(exp_gdp2, aes(discretionary_outlays, gdp))+
+  xlab("Discretionary Spending") + ylab("GDP")+
+  geom_smooth(method=lm, show.legend = FALSE, color="green")+
+  ggtitle("GDP versus Discretionary Spending ($mil)")
+
+
+```
